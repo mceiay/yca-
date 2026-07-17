@@ -31,7 +31,7 @@ if user_input:
         st.write("Merhaba! YCA seninle tanıştığına çok memnun oldu.")
     
     # 2. Arama mantığı
-   else:
+    else:
         with st.spinner('YCA düşünüyor...'):
             try:
                 # Arama metodunu biraz daha esnek hale getirelim
