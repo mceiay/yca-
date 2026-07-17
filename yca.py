@@ -81,3 +81,23 @@ if user_input := st.chat_input("YCA'ya bir şey yaz... (Örn: ara: voleybol)"):
     st.session_state.messages.append({"role": "assistant", "content": response})
     with st.chat_message("assistant"):
         st.markdown(response)
+        import streamlit as st
+from ddgs import DDGS
+
+st.title("YCA - Yapay Zeka Asistanı")
+
+user_input = st.text_input("YCA'ya bir şey yaz...")
+
+if user_input:
+    # 1. Sohbet mantığını buraya ekliyoruz
+    if "nasılsın" in user_input.lower():
+        st.write("İyiyim, teşekkür ederim! Siz nasılsınız?")
+    elif "merhaba" in user_input.lower():
+        st.write("Merhaba! Sana nasıl yardımcı olabilirim?")
+    
+    # 2. Eğer sohbet değilse arama yapmaya devam etsin
+    else:
+        with st.spinner('Düşünüyorum...'):
+            results = DDGS().text(user_input, max_results=3)
+            for r in results:
+                st.write(r['body'])
