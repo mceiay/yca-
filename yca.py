@@ -31,11 +31,17 @@ if user_input:
         st.write("Merhaba! YCA seninle tanıştığına çok memnun oldu.")
     
     # 2. Arama mantığı
-    else:
+   else:
         with st.spinner('YCA düşünüyor...'):
             try:
-                results = DDGS().text(user_input, max_results=3)
-                st.write("Arama sonuçları:")
-                st.write(results)
+                # Arama metodunu biraz daha esnek hale getirelim
+                results = list(DDGS().text(user_input, max_results=3))
+                
+                if results:
+                    st.write("İşte bulduklarım:")
+                    for r in results:
+                        st.write(f"- {r['body']}")
+                else:
+                    st.warning("Maalesef bu konuda bir sonuç bulamadım. Başka bir şey sormayı dene!")
             except Exception as e:
-                st.error(f"Hata oluştu: {e}")
+                st.error(f"Bir hata oluştu: {e}")
