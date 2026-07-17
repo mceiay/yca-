@@ -35,8 +35,7 @@ if user_input:
         with st.spinner('YCA düşünüyor...'):
             try:
                 results = DDGS().text(user_input, max_results=3)
-                for r in results:
-                    with st.expander(f"📌 {r['title']}"): # Sonuçları şık kutularda göster
-                        st.write(r['body'])
+                st.write("Arama sonuçları:")
+                st.write(results)
             except Exception as e:
-                st.error("Bir hata oluştu, lütfen tekrar dene.")
+                st.error(f"Hata oluştu: {e}")
