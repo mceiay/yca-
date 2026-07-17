@@ -1,6 +1,2 @@
 streamlit
-ddgs
-requests
-beautifulsoup4
-streamlit
-duckduckgo-search
+duckduckgo-search==6.2.1
