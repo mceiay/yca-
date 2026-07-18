@@ -1,38 +1,38 @@
 import streamlit as st
+from groq import Groq
 
-# Sayfa Yapılandırması
-st.set_page_config(page_title="YCA Asistan", page_icon="🤖")
+# Groq API kurulumu
+client = Groq(api_key="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")
 
-# Yan Menü
-st.sidebar.title("YCA Ayarları")
-st.sidebar.info("Mod: Kişisel Asistan")
+st.title("YCA - Kişisel Asistan")
 
-# Ana Başlık
-st.title("🤖 YCA - Senin Asistanın")
-st.subheader("Bana istediğini sor, senin için özelleştireyim.")
+# 1. Sohbet geçmişini saklamak için hafıza oluşturuyoruz
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {"role": "system", "content": "Sen YCA'sın, Cemil'in kişisel asistanısın. Sadece Türkçe konuş, kısa ve samimi ol."}
+    ]
 
-user_input = st.text_input("Bugün neler yapalım?")
+# 2. Önceki konuşmaları ekrana basıyoruz
+for message in st.session_state.messages:
+    if message["role"] != "system":
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-if user_input:
-    text = user_input.lower()
+# 3. Kullanıcıdan yeni mesaj alıyoruz
+if prompt := st.chat_input("Mesajını buraya yaz..."):
+    # Mesajı geçmişe ekle
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # 4. Asistanın cevabını al
+    with st.chat_message("assistant"):
+        stream = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=st.session_state.messages,
+        )
+        response = stream.choices[0].message.content
+        st.markdown(response)
     
-    # KİŞİSELLEŞTİRİLMİŞ CEVAPLAR (Buraları istediğin gibi çoğaltabilirsin)
-    if "nasılsın" in text:
-        st.success("Harikayım! Seninle yeni projeler üzerinde çalışmaya hazırım. Sen nasılsın?")
-    
-    elif "galatasaray" in text or "gs" in text:
-        st.balloons()
-        st.write("### 🦁 Cimbom'un yeri bende ayrıdır!")
-        st.write("Takımın son durumu hakkında bilgi almak istersen [buradan güncel haberlere ulaşabilirsin.](https://www.google.com/search?q=galatasaray+haberleri)")
-    
-    elif "kod" in text or "python" in text or "yazılım" in text:
-        st.write("💻 **Yazılım modu aktif!** Kodunu veya hata mesajını buraya yapıştır, birlikte düzeltelim.")
-    
-    elif "merhaba" in text:
-        st.write("Merhaba! YCA emrinde, sana nasıl yardımcı olabilirim?")
-    
-    # GENEL ARAMA (Eğer özel bir durum yoksa)
-    else:
-        st.write(f"Anladım, '{user_input}' konusuna bakıyorum...")
-        google_url = f"https://www.google.com/search?q={user_input.replace(' ', '+')}"
-        st.link_button("🔎 Google'da Detaylı Ara", google_url)
+    # Cevabı da geçmişe ekle ki bir sonrakini hatırlasın
+    st.session_state.messages.append({"role": "assistant", "content": response}) 
