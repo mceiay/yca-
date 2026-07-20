@@ -9,7 +9,12 @@ st.title("YCA - Kişisel Asistan")
 # 1. Sohbet geçmişini saklamak için hafıza oluşturuyoruz
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "system", "content": "Sen YCA'sın, Cemil'in kişisel asistanısın. Sadece Türkçe konuş, kısa ve samimi ol."}
+        {"role": "system", "content": """Sen YCA'sın, Cemil'in dijital asistanısın. 
+        Sadece Türkçe konuş. 
+        Görevin sadece yazılım, teknik destek ve günlük verimlilik konularında yardımcı olmaktır. 
+        Duygusal, felsefi, dini veya yas tutma gibi insani duygular içeren konulara girme. 
+        Eğer konu dışına çıkılırsa, nazikçe teknik konulara geri dönmeyi teklif et. 
+        Her zaman kısa, net ve profesyonel cevaplar ver."""}
     ]
 
 # 2. Önceki konuşmaları ekrana basıyoruz
