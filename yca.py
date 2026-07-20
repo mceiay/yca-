@@ -33,7 +33,7 @@ if prompt := st.chat_input("Mesajını buraya yaz..."):
     # 4. Asistanın cevabını al
     with st.chat_message("assistant"):
         stream = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama-3-groq-70b-8192-tool-use-preview"
             messages=st.session_state.messages,
         )
         response = stream.choices[0].message.content
