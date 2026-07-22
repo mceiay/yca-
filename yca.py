@@ -1,118 +1,125 @@
-import streamlit as st
 import json
 import os
+import streamlit as st
 from groq import Groq
 from duckduckgo_search import DDGS
 
-# 1. Ayarlar
-client = Groq(api_key="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")  # Kendi Groq API anahtarını buraya yaz
+# Sayfa Yapılandırması
+st.set_page_config(page_title="YCA - Akıllı Hibrit Asistan", page_icon="🤖")
+
+# Hafıza Dosyası Yönetimi (Kalıcı Bellek)
 HAFIZA_DOSYASI = "hafiza.json"
 
 def hafizayi_yukle():
     if os.path.exists(HAFIZA_DOSYASI):
-        with open(HAFIZA_DOSYASI, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {"isim": None, "bilgiler": []}
+        try:
+            with open(HAFIZA_DOSYASI, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if "ogrenilen_sorular" not in data:
+                    data["ogrenilen_sorular"] = {}
+                if "sohbet_gecmisi" not in data:
+                    data["sohbet_gecmisi"] = []
+                return data
+        except:
+            pass
+    return {"ogrenilen_sorular": {}, "sohbet_gecmisi": []}
 
 def hafizayi_kaydet(data):
     with open(HAFIZA_DOSYASI, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-def internetten_bul(soru):
-    try:
-        with DDGS() as ddgs:
-            hedef_sorgu = f"{soru} maç sonucu özet"
-            results = list(ddgs.text(hedef_sorgu, max_results=6, region="tr-tr", backend="api"))
-            if results:
-                metin = ""
-                linkler = []
-                for r in results:
-                    title = r.get('title', '')
-                    body = r.get('body', '')
-                    href = r.get('href', '')
-                    
-                    yasakli_kelimeler = ["duckduckgo.com", "bing.com", "google.com", "kick.com", "twitch.tv", "eksisozluk.com", "reddit.com"]
-                    if href and not any(yasakli in href.lower() for yasakli in yasakli_kelimeler):
-                        metin += f"- {title}: {body}\n"
-                        linkler.append((title, href))
-                
-                secilenler = linkler[:2] if linkler else [(r['title'], r['href']) for r in results[:2] if 'href' in r]
-                return metin, secilenler
-        return "Güncel haber bulunamadı.", []
-    except Exception as e:
-        return f"Arama hatası: {str(e)}", []
+# Hafızayı yükle
+hafiza = hafizayi_yukle()
 
-# Session State Başlatma
-if "user_data" not in st.session_state:
-    st.session_state.user_data = hafizayi_yukle()
+# Groq İstemci Ayarları
+api_key = "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" # Kendi anahtarın
+try:
+    if "GROQ_API_KEY" in st.secrets:
+        api_key = st.secrets["GROQ_API_KEY"]
+except:
+    pass
+
+client = Groq(api_key=api_key)
+
+st.title("YCA - Akıllı Hibrit Asistan")
+
+# Sohbet Geçmişini Kalıcı Hafızadan Başlat
 if "messages" not in st.session_state:
-    st.session_state.messages = []
+    st.session_state.messages = hafiza["sohbet_gecmisi"]
 
-st.title("YCA - Kişisel Asistan")
+# Ekrana mesajları yazdır
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-# İsim sorgulama
-if st.session_state.user_data["isim"] is None:
-    st.write("Merhaba! İsmin nedir?")
-    if isim := st.chat_input("İsmin..."):
-        st.session_state.user_data["isim"] = isim
-        hafizayi_kaydet(st.session_state.user_data)
-        st.rerun()
-else:
-    # Sohbet geçmişini yazdır
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-            if "links" in msg and msg["links"]:
-                st.markdown("**Kaynaklar:**")
-                for title, href in msg["links"]:
-                    st.markdown(f"- [{title}]({href})")
+# İnternette Arama Fonksiyonu
+def internetten_bul(sorgu):
+    try:
+        results = DDGS().text(sorgu, region="tr-tr", max_results=3)
+        return "\n".join([r['body'] for r in results]) if results else "Bilgi bulunamadı."
+    except Exception as e:
+        return f"Arama hatası: {e}"
 
-    if prompt := st.chat_input("Sohbet et veya haber sor..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+# Kullanıcı Girdisi
+if prompt := st.chat_input("YCA'ya bir şeyler yaz..."):
+    # Kullanıcı mesajını ekle ve hafızaya kaydet
+    user_msg = {"role": "user", "content": prompt}
+    st.session_state.messages.append(user_msg)
+    hafiza["sohbet_gecmisi"] = st.session_state.messages
+    hafizayi_kaydet(hafiza)
 
-        # Hafıza güncelleme
-        if any(kelime in prompt.lower() for kelime in ["seviyorum", "hoşlanırım", "ilgileniyorum"]):
-            st.session_state.user_data["bilgiler"].append(prompt)
-            hafizayi_kaydet(st.session_state.user_data)
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-        # Güncel Veri / Haber Çekme (Sadece bilgi/haber sorulduğunda arama yap)
-        guncel_veri, kaynak_listesi = "", []
-        sohbet_kelimeleri = ["nasılsın", "merhaba", "selam", "naber", "iyi misin", "günaydın", "iyi akşamlar"]
+    # 1. Aşama: Hafıza Kontrolü (Niyet Tespiti)
+    temiz_prompt = prompt.lower().strip()
+    arama_gerekli_mi = False
+
+    if temiz_prompt in hafiza["ogrenilen_sorular"]:
+        arama_gerekli_mi = hafiza["ogrenilen_sorular"][temiz_prompt]
+    else:
+        # İlk defa karşılaşılan sorular için varsayılan akış (istersen sonradan değiştirebilirsin)
+        arama_gerekli_mi = False 
+        hafiza["ogrenilen_sorular"][temiz_prompt] = arama_gerekli_mi
+        hafizayi_kaydet(hafiza)
+
+    # 2. Aşama: Karara Göre Bilgi Toplama
+    baglam = ""
+    if arama_gerekli_mi:
+        with st.spinner("İnternette araştırılıyor..."):
+            baglam = internetten_bul(prompt)
+
+    # 3. Aşama: Yanıt Üretme
+    sistem_mesaji = "Sen akıllı ve yardımcısın. Kullanıcıyı hatırla ve ona göre doğal sohbet et."
+    if baglam:
+        sistem_mesaji += f"\n\nİnternetten elde edilen güncel bilgiler:\n{baglam}"
+
+    mesaj_listesi = [{"role": "system", "content": sistem_mesaji}] + st.session_state.messages
+
+    with st.chat_message("assistant"):
+        response_placeholder = st.empty()
+        full_response = ""
         
-        if not any(k in prompt.lower() for k in sohbet_kelimeleri):
-            with st.spinner("Haberler ve kaynaklar taranıyor..."):
-                guncel_veri, kaynak_listesi = internetten_bul(prompt)
-
-        bilinenler = ", ".join(st.session_state.user_data["bilgiler"])
-        
-        system_prompt = f"""Sen YCA'sın. Karşındaki kişi: {st.session_state.user_data['isim']}.
-Hakkında bildiklerin: {bilinenler}.
-
-ELİNDEKİ GÜNCEL BİLGİ/HABERLER: {guncel_veri}
-
-KESİN KURALLAR:
-1. Türkçe dilbilgisi kurallarına, akıcılığa ve doğallığa son derece dikkat et. Cümlelerin kopuk, bozuk veya çeviri kokan bir yapıda olması kesinlikle yasaktır.
-2. İnternetten gelen verileri tamamen özümseyip kullanıcıya kusursuz ve anlaşılır bir Türkçe ile aktar.
-3. Kullanıcıya doğal bir arkadaş gibi samimi, akıcı ve net bir dille hitap et.
-4. Asla 'İnternette arama yaptım' veya 'Bulduğum sonuçlara göre' gibi robotik ifadeler kullanma."""
-
-        clean_context = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
-        context = [{"role": "system", "content": system_prompt}] + clean_context
-        
-        completion = client.chat.completions.create(messages=context, model="llama-3.3-70b-versatile")
-        cevap = completion.choices[0].message.content
-        
-        st.session_state.messages.append({
-            "role": "assistant", 
-            "content": cevap,
-            "links": kaynak_listesi
-        })
-
-        with st.chat_message("assistant"):
-            st.markdown(cevap)
-            if kaynak_listesi:
-                st.markdown("**Kaynaklar:**")
-                for title, href in kaynak_listesi:
-                    st.markdown(f"- [{title}]({href})")
+        try:
+            completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=mesaj_listesi,
+                stream=True
+            )
+            
+            for chunk in completion:
+                if chunk.choices[0].delta.content:
+                    full_response += chunk.choices[0].delta.content
+                    response_placeholder.markdown(full_response + "▌")
+                    
+            response_placeholder.markdown(full_response)
+            
+            # Asistanın yanıtını da kalıcı hafızaya ekle
+            assistant_msg = {"role": "assistant", "content": full_response}
+            st.session_state.messages.append(assistant_msg)
+            hafiza["sohbet_gecmisi"] = st.session_state.messages
+            hafizayi_kaydet(hafiza)
+            
+        except Exception as e:
+            error_msg = f"Bir hata oluştu: {e}"
+            response_placeholder.markdown(error_msg)
