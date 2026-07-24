@@ -1,3 +1,5 @@
 streamlit
 groq
-duckduckgo_search
+tavily-python
+streamlit-mic-recorder
+gtts
