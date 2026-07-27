@@ -9,7 +9,7 @@ from streamlit_mic_recorder import speech_to_text
 from gtts import gTTS
 from authlib.integrations.requests_client import OAuth2Session
 from PIL import Image
-import google.generativeai as genai
+from google import genai
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="YCA - Akıllı Hibrit Asistan", page_icon="🤖")
@@ -26,7 +26,6 @@ USERINFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo"
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# OAuth oturum nesnesi NameError hatalarını önlemek için en başta tanımlandı
 oauth = OAuth2Session(client_id, client_secret, scope="openid email profile")
 
 if not st.session_state.user:
@@ -89,14 +88,12 @@ HAFIZA_DOSYASI = f"hafiza_{safe_email_filename}.json"
 
 st.sidebar.success(f"Giriş yapıldı:\n{user.get('name', 'Kullanıcı')}\n({user_email})")
 
-# Düzeltilmiş Çıkış Yap Butonu
 if st.sidebar.button("Çıkış Yap"):
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.query_params.clear()
     st.rerun()
 
-# Kullanıcıya Özel Hafıza Dosyası Yönetimi
 def hafizayi_yukle():
     if os.path.exists(HAFIZA_DOSYASI):
         try:
@@ -115,22 +112,16 @@ def hafizayi_kaydet(data):
 
 hafiza = hafizayi_yukle()
 
-# API İstemci Ayarları
 groq_api_key = st.secrets.get("GROQ_API_KEY", "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")
 client = Groq(api_key=groq_api_key)
 
 tavily_api_key = st.secrets.get("TAVILY_API_KEY", "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")
 tavily_client = TavilyClient(api_key=tavily_api_key)
 
-# Gemini Vision Yapılandırması ve OAuth Çakışma Önlemi
 gemini_api_key = st.secrets.get("GEMINI_API_KEY", "AQ.Ab8RN6JxgCkBuMSrGCmwgminDf5DTINJzBVnI3_-VwHds43tIg")
-if gemini_api_key:
-    os.environ["GEMINI_API_KEY"] = gemini_api_key
-    genai.configure(api_key=gemini_api_key)
 
 st.title("YCA - Akıllı Hibrit Asistan")
 
-# --- KENAR ÇUBUĞU: KANAL / MOD SEÇİMİ (CHAT vs. KAMERA) ---
 app_mode = st.sidebar.radio("Mod Seçimi", ["💬 Sohbet & Asistan", "📷 Kamera & Nesne Tanıma (Vision)"])
 
 if app_mode == "💬 Sohbet & Asistan":
@@ -259,9 +250,12 @@ elif app_mode == "📷 Kamera & Nesne Tanıma (Vision)":
             else:
                 with st.spinner("Görsel analiz ediliyor..."):
                     try:
-                        genai.configure(api_key=gemini_api_key)
-                        model = genai.GenerativeModel('gemini-1.5-flash')
-                        response = model.generate_content([vision_prompt, image])
+                        # Yeni nesil google-genai kütüphanesi istemci yapısı (OAuth ve API anahtarı çakışmasını engeller)
+                        gemini_client = genai.Client(api_key=gemini_api_key)
+                        response = gemini_client.models.generate_content(
+                            model='gemini-2.5-flash',
+                            contents=[vision_prompt, image]
+                        )
                         
                         st.success("Analiz Başarılı!")
                         st.markdown(response.text)
