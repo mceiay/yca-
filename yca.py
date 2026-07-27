@@ -256,6 +256,10 @@ elif app_mode == "📷 Kamera & Nesne Tanıma (Vision)":
                         model="qwen/qwen3.6-27b",
                         messages=[
                             {
+                                "role": "system",
+                                "content": "Sen uzman bir görsel analiz asistanısın. Kullanıcının gönderdiği fotoğrafı dikkatle incele ve yanıtını her zaman akıcı ve doğru bir Türkçe ile ver."
+                            },
+                            {
                                 "role": "user",
                                 "content": [
                                     {"type": "text", "text": vision_prompt},
