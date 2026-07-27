@@ -9,7 +9,7 @@ from streamlit_mic_recorder import speech_to_text
 from gtts import gTTS
 from authlib.integrations.requests_client import OAuth2Session
 from PIL import Image
-from google import genai
+import google.generativeai as genai
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="YCA - Akıllı Hibrit Asistan", page_icon="🤖")
@@ -250,12 +250,14 @@ elif app_mode == "📷 Kamera & Nesne Tanıma (Vision)":
             else:
                 with st.spinner("Görsel analiz ediliyor..."):
                     try:
-                        # Yeni nesil google-genai kütüphanesi istemci yapısı (OAuth ve API anahtarı çakışmasını engeller)
-                        gemini_client = genai.Client(api_key=gemini_api_key)
-                        response = gemini_client.models.generate_content(
-                            model='gemini-2.5-flash',
-                            contents=[vision_prompt, image]
-                        )
+                        # Çakışmayı engellemek için ortam değişkenlerini temizleyip,
+                        # doğrudan API anahtarıyla client oluşturuyoruz.
+                        if "GEMINI_API_KEY" in os.environ:
+                            del os.environ["GEMINI_API_KEY"]
+                        
+                        genai.configure(api_key=gemini_api_key)
+                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        response = model.generate_content([vision_prompt, image])
                         
                         st.success("Analiz Başarılı!")
                         st.markdown(response.text)
