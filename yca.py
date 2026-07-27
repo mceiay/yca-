@@ -26,17 +26,13 @@ USERINFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo"
 if "user" not in st.session_state:
     st.session_state.user = None
 
+# OAuth oturum nesnesi NameError hatalarını önlemek için en başta tanımlandı
+oauth = OAuth2Session(client_id, client_secret, scope="openid email profile")
+
 if not st.session_state.user:
     st.title("YCA - Akıllı Hibrit Asistan")
     st.write("Devam etmek için lütfen Google hesabınızla giriş yapın.")
 
-    uri, state = oauth.create_authorization_url(
-        AUTHORIZATION_ENDPOINT, 
-        redirect_uri=redirect_uri,
-        prompt="consent" # Eklendi: Kullanıcının hesabı seçmesini zorlar ve çerez çakışmasını önler
-    )
-    st.link_button("🔐 Google ile Giriş Yap", uri)
-    
     query_params = st.query_params
     if "code" in query_params:
         code = query_params["code"]
@@ -74,7 +70,8 @@ if not st.session_state.user:
 
     uri, state = oauth.create_authorization_url(
         AUTHORIZATION_ENDPOINT, 
-        redirect_uri=redirect_uri
+        redirect_uri=redirect_uri,
+        prompt="consent"
     )
     st.link_button("🔐 Google ile Giriş Yap", uri)
     st.stop()
@@ -216,10 +213,6 @@ if app_mode == "💬 Sohbet & Asistan":
             
             try:
                 completion = client.chat.completions.create(
-                    model="model-item-or-fallback",
-                    messages=mesaj_listesi,
-                    stream=True
-                ) if False else client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=mesaj_listesi,
                     stream=True
@@ -265,7 +258,7 @@ elif app_mode == "📷 Kamera & Nesne Tanıma (Vision)":
             else:
                 with st.spinner("Görsel analiz ediliyor..."):
                     try:
-                        # Güncel ve aktif kararlı model tanımlaması
+                        # Güncel ve kararlı model tanımlaması
                         model = genai.GenerativeModel('gemini-3.6-flash')
                         response = model.generate_content([vision_prompt, image])
                         
