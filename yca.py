@@ -30,7 +30,12 @@ if not st.session_state.user:
     st.title("YCA - Akıllı Hibrit Asistan")
     st.write("Devam etmek için lütfen Google hesabınızla giriş yapın.")
 
-    oauth = OAuth2Session(client_id, client_secret, scope="openid email profile")
+    uri, state = oauth.create_authorization_url(
+        AUTHORIZATION_ENDPOINT, 
+        redirect_uri=redirect_uri,
+        prompt="consent" # Eklendi: Kullanıcının hesabı seçmesini zorlar ve çerez çakışmasını önler
+    )
+    st.link_button("🔐 Google ile Giriş Yap", uri)
     
     query_params = st.query_params
     if "code" in query_params:
