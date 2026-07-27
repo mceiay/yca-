@@ -6,4 +6,4 @@ streamlit-mic-recorder
 gtts
 authlib
 pillow
-google-genai
+google-generativeai
