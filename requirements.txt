@@ -5,5 +5,5 @@ tavily-python
 streamlit-mic-recorder
 gtts
 authlib
-Pillow
-google-generativeai
+pillow
+google-genai
