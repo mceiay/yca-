@@ -89,7 +89,7 @@ HAFIZA_DOSYASI = f"hafiza_{safe_email_filename}.json"
 
 st.sidebar.success(f"Giriş yapıldı:\n{user.get('name', 'Kullanıcı')}\n({user_email})")
 
-# Düzeltilmiş Çıkış Yap Butonu (Oturum hafızasını tamamen temizler)
+# Düzeltilmiş Çıkış Yap Butonu
 if st.sidebar.button("Çıkış Yap"):
     for key in list(st.session_state.keys()):
         del st.session_state[key]
@@ -122,9 +122,10 @@ client = Groq(api_key=groq_api_key)
 tavily_api_key = st.secrets.get("TAVILY_API_KEY", "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")
 tavily_client = TavilyClient(api_key=tavily_api_key)
 
-# Gemini Vision Yapılandırması
+# Gemini Vision Yapılandırması ve OAuth Çakışma Önlemi
 gemini_api_key = st.secrets.get("GEMINI_API_KEY", "AQ.Ab8RN6JxgCkBuMSrGCmwgminDf5DTINJzBVnI3_-VwHds43tIg")
 if gemini_api_key:
+    os.environ["GEMINI_API_KEY"] = gemini_api_key
     genai.configure(api_key=gemini_api_key)
 
 st.title("YCA - Akıllı Hibrit Asistan")
@@ -258,8 +259,8 @@ elif app_mode == "📷 Kamera & Nesne Tanıma (Vision)":
             else:
                 with st.spinner("Görsel analiz ediliyor..."):
                     try:
-                        # Güncel ve kararlı model tanımlaması
-                        model = genai.GenerativeModel('gemini-3.6-flash')
+                        genai.configure(api_key=gemini_api_key)
+                        model = genai.GenerativeModel('gemini-1.5-flash')
                         response = model.generate_content([vision_prompt, image])
                         
                         st.success("Analiz Başarılı!")
