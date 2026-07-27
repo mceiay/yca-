@@ -1,7 +1,9 @@
 streamlit
+requests
 groq
 tavily-python
 streamlit-mic-recorder
 gtts
 authlib
-requests
+Pillow
+google-generativeai
