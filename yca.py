@@ -119,8 +119,6 @@ client = Groq(api_key=groq_api_key)
 tavily_api_key = st.secrets.get("TAVILY_API_KEY", "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")
 tavily_client = TavilyClient(api_key=tavily_api_key)
 
-gemini_api_key = st.secrets.get("GEMINI_API_KEY", "AQ.Ab8RN6JxgCkBuMSrGCmwgminDf5DTINJzBVnI3_-VwHds43tIg")
-
 st.title("YCA - Akıllı Hibrit Asistan")
 
 app_mode = st.sidebar.radio("Mod Seçimi", ["💬 Sohbet & Asistan", "📷 Kamera & Nesne Tanıma (Vision)"])
@@ -234,8 +232,8 @@ if app_mode == "💬 Sohbet & Asistan":
                 response_placeholder.markdown(error_msg)
 
 elif app_mode == "📷 Kamera & Nesne Tanıma (Vision)":
-    st.subheader("YCA Vision - Gerçek Zamanlı Nesne ve Görsel Analizi")
-    st.write("Kameradan bir fotoğraf çekerek veya nesne göstererek analiz ettirebilirsiniz.")
+    st.subheader("YCA Vision - Gerçek Zamanlı Görsel Analizi (Groq Vision)")
+    st.write("Kameradan çektiğiniz fotoğraf, Groq altyapısındaki Llama Vision modeli ile analiz edilir.")
 
     camera_file = st.camera_input("Fotoğraf Çek", key="yca_vision_camera")
 
@@ -246,50 +244,39 @@ elif app_mode == "📷 Kamera & Nesne Tanıma (Vision)":
         vision_prompt = st.text_input("Görsel hakkında ne öğrenmek istiyorsun?", "Bu fotoğrafın içinde ne var, detaylı açıkla.", key="vision_prompt_input")
         
         if st.button("Görseli Analiz Et", key="vision_analyze_btn"):
-            if not gemini_api_key:
-                st.error("Streamlit Secrets içinde `GEMINI_API_KEY` tanımlı değil!")
-            else:
-                with st.spinner("Görsel analiz ediliyor... (Ham API İstek Yöntemi)"):
-                    try:
-                        # Görseli base64 formatına çeviriyoruz
-                        buffered = io.BytesIO()
-                        image.save(buffered, format="JPEG")
-                        img_bytes = buffered.getvalue()
-                        img_base64 = base64.b64encode(img_bytes).decode("utf-8")
+            with st.spinner("Görsel Groq Vision ile analiz ediliyor..."):
+                try:
+                    # Görseli base64 formatına çeviriyoruz
+                    buffered = io.BytesIO()
+                    image.save(buffered, format="JPEG")
+                    img_bytes = buffered.getvalue()
+                    img_base64 = base64.b64encode(img_bytes).decode("utf-8")
+                    image_url = f"data:image/jpeg;base64,{img_base64}"
 
-                        # Doğrudan Gemini REST API endpoint'ine istek atıyoruz (OAuth token çakışması sıfırlanır)
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_api_key}"
-                        headers = {"Content-Type": "application/json"}
-                        payload = {
-                            "contents": [
-                                {
-                                    "parts": [
-                                        {"text": vision_prompt},
-                                        {
-                                            "inline_data": {
-                                                "mime_type": "image/jpeg",
-                                                "data": img_base64
-                                            }
+                    # Groq Vision modeli üzerinden multimodal istek atıyoruz (OAuth çakışması sıfırlanır)
+                    completion = client.chat.completions.create(
+                        model="llama-3.2-90b-vision-preview",
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": vision_prompt},
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {
+                                            "url": image_url
                                         }
-                                    ]
-                                }
-                            ]
-                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        temperature=0.7,
+                        max_tokens=1024
+                    ]
+                    
+                    analysis_result = completion.choices[0].message.content
+                    st.success("Analiz Başarılı!")
+                    st.markdown(analysis_result)
 
-                        response = requests.post(url, headers=headers, json=payload)
-                        res_json = response.json()
-
-                        if response.status_code == 200:
-                            # Yanıtı güvenli bir şekilde parse etme
-                            try:
-                                candidate_text = res_json["candidates"][0]["content"]["parts"][0]["text"]
-                                st.success("Analiz Başarılı!")
-                                st.markdown(candidate_text)
-                            except (KeyError, IndexError):
-                                st.error(f"API'den beklenmeyen formatta yanıt döndü: {res_json}")
-                        else:
-                            error_message = res_json.get("error", {}).get("message", "Bilinmeyen API hatası")
-                            st.error(f"Gemini API Hatası ({response.status_code}): {error_message}")
-
-                    except Exception as e:
-                        st.error(f"Görsel analiz edilirken hata oluştu: {e}")
+                except Exception as e:
+                    st.error(f"Görsel analiz edilirken hata oluştu: {e}")
