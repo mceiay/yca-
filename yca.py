@@ -120,8 +120,8 @@ client = Groq(api_key=groq_api_key)
 tavily_api_key = st.secrets.get("TAVILY_API_KEY", "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")
 tavily_client = TavilyClient(api_key=tavily_api_key)
 
-# Gemini Vision Yapılandırması (Secrets içine GEMINI_API_KEY eklediğinden emin ol)
-gemini_api_key = st.secrets.get("GEMINI_API_KEY", "")
+# Gemini Vision Yapılandırması
+gemini_api_key = st.secrets.get("GEMINI_API_KEY", "AQ.Ab8RN6JxgCkBuMSrGCmwgminDf5DTINJzBVnI3_-VwHds43tIg")
 if gemini_api_key:
     genai.configure(api_key=gemini_api_key)
 
@@ -211,6 +211,10 @@ if app_mode == "💬 Sohbet & Asistan":
             
             try:
                 completion = client.chat.completions.create(
+                    model="model-item-or-fallback",
+                    messages=mesaj_listesi,
+                    stream=True
+                ) if False else client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=mesaj_listesi,
                     stream=True
@@ -242,13 +246,11 @@ elif app_mode == "📷 Kamera & Nesne Tanıma (Vision)":
     st.subheader("YCA Vision - Gerçek Zamanlı Nesne ve Görsel Analizi")
     st.write("Kameradan bir fotoğraf çekerek veya nesne göstererek analiz ettirebilirsiniz.")
 
-    # Benzersiz bir key ekleyerek DOM uyuşmazlıklarının önüne geçiyoruz
     camera_file = st.camera_input("Fotoğraf Çek", key="yca_vision_camera")
 
     if camera_file is not None:
         image = Image.open(camera_file)
         st.image(image, caption="Yakalanan Görüntü", use_container_width=True)
-        
         
         vision_prompt = st.text_input("Görsel hakkında ne öğrenmek istiyorsun?", "Bu fotoğrafın içinde ne var, detaylı açıkla.", key="vision_prompt_input")
         
@@ -258,7 +260,8 @@ elif app_mode == "📷 Kamera & Nesne Tanıma (Vision)":
             else:
                 with st.spinner("Görsel analiz ediliyor..."):
                     try:
-                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        # Güncel ve aktif kararlı model tanımlaması
+                        model = genai.GenerativeModel('gemini-3.6-flash')
                         response = model.generate_content([vision_prompt, image])
                         
                         st.success("Analiz Başarılı!")
