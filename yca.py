@@ -9,8 +9,8 @@ from streamlit_mic_recorder import speech_to_text
 from gtts import gTTS
 from authlib.integrations.requests_client import OAuth2Session
 from PIL import Image
-import google.generativeai as genai
-from google.generativeai.client import configure
+import base64
+import io
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="YCA - Akıllı Hibrit Asistan", page_icon="🤖")
@@ -249,29 +249,47 @@ elif app_mode == "📷 Kamera & Nesne Tanıma (Vision)":
             if not gemini_api_key:
                 st.error("Streamlit Secrets içinde `GEMINI_API_KEY` tanımlı değil!")
             else:
-                with st.spinner("Görsel analiz ediliyor..."):
+                with st.spinner("Görsel analiz ediliyor... (Ham API İstek Yöntemi)"):
                     try:
-                        # OAuth token çakışmasını önlemek için global client'ı doğrudan API anahtarıyla zorluyoruz
-                        genai.api_key = None
-                        if "GOOGLE_API_KEY" in os.environ:
-                            del os.environ["GOOGLE_API_KEY"]
-                        if "GEMINI_API_KEY" in os.environ:
-                            del os.environ["GEMINI_API_KEY"]
-                            
-                        # Doğrudan Client nesnesi üzerinden request atarak global state sızıntısını kesiyoruz
-                        chat_client = genai.Client(api_key=gemini_api_key) if hasattr(genai, "Client") else None
-                        
-                        if chat_client:
-                            response = chat_client.models.generate_content(
-                                model='gemini-1.5-flash',
-                                contents=[vision_prompt, image]
-                            )
+                        # Görseli base64 formatına çeviriyoruz
+                        buffered = io.BytesIO()
+                        image.save(buffered, format="JPEG")
+                        img_bytes = buffered.getvalue()
+                        img_base64 = base64.b64encode(img_bytes).decode("utf-8")
+
+                        # Doğrudan Gemini REST API endpoint'ine istek atıyoruz (OAuth token çakışması sıfırlanır)
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_api_key}"
+                        headers = {"Content-Type": "application/json"}
+                        payload = {
+                            "contents": [
+                                {
+                                    "parts": [
+                                        {"text": vision_prompt},
+                                        {
+                                            "inline_data": {
+                                                "mime_type": "image/jpeg",
+                                                "data": img_base64
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+
+                        response = requests.post(url, headers=headers, json=payload)
+                        res_json = response.json()
+
+                        if response.status_code == 200:
+                            # Yanıtı güvenli bir şekilde parse etme
+                            try:
+                                candidate_text = res_json["candidates"][0]["content"]["parts"][0]["text"]
+                                st.success("Analiz Başarılı!")
+                                st.markdown(candidate_text)
+                            except (KeyError, IndexError):
+                                st.error(f"API'den beklenmeyen formatta yanıt döndü: {res_json}")
                         else:
-                            genai.configure(api_key=gemini_api_key)
-                            model = genai.GenerativeModel('gemini-1.5-flash')
-                            response = model.generate_content([vision_prompt, image])
-                        
-                        st.success("Analiz Başarılı!")
-                        st.markdown(response.text)
+                            error_message = res_json.get("error", {}).get("message", "Bilinmeyen API hatası")
+                            st.error(f"Gemini API Hatası ({response.status_code}): {error_message}")
+
                     except Exception as e:
                         st.error(f"Görsel analiz edilirken hata oluştu: {e}")
