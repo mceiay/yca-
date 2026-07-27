@@ -233,7 +233,7 @@ if app_mode == "💬 Sohbet & Asistan":
 
 elif app_mode == "📷 Kamera & Nesne Tanıma (Vision)":
     st.subheader("YCA Vision - Gerçek Zamanlı Görsel Analizi (Groq Vision)")
-    st.write("Kameradan çektiğiniz fotoğraf, Groq altyapısındaki Llama Vision modeli ile analiz edilir.")
+    st.write("Kameradan çektiğiniz fotoğraf, Groq altyapısındaki en güncel multimodal model ile analiz edilir.")
 
     camera_file = st.camera_input("Fotoğraf Çek", key="yca_vision_camera")
 
@@ -253,7 +253,7 @@ elif app_mode == "📷 Kamera & Nesne Tanıma (Vision)":
                     image_url = f"data:image/jpeg;base64,{img_base64}"
 
                     completion = client.chat.completions.create(
-                        model="llama-3.2-90b-vision-preview",
+                        model="qwen/qwen3.6-27b",
                         messages=[
                             {
                                 "role": "user",
