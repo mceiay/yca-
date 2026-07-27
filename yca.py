@@ -246,14 +246,12 @@ elif app_mode == "📷 Kamera & Nesne Tanıma (Vision)":
         if st.button("Görseli Analiz Et", key="vision_analyze_btn"):
             with st.spinner("Görsel Groq Vision ile analiz ediliyor..."):
                 try:
-                    # Görseli base64 formatına çeviriyoruz
                     buffered = io.BytesIO()
                     image.save(buffered, format="JPEG")
                     img_bytes = buffered.getvalue()
                     img_base64 = base64.b64encode(img_bytes).decode("utf-8")
                     image_url = f"data:image/jpeg;base64,{img_base64}"
 
-                    # Groq Vision modeli üzerinden multimodal istek atıyoruz (OAuth çakışması sıfırlanır)
                     completion = client.chat.completions.create(
                         model="llama-3.2-90b-vision-preview",
                         messages=[
@@ -272,7 +270,7 @@ elif app_mode == "📷 Kamera & Nesne Tanıma (Vision)":
                         ],
                         temperature=0.7,
                         max_tokens=1024
-                    ]
+                    )
                     
                     analysis_result = completion.choices[0].message.content
                     st.success("Analiz Başarılı!")
