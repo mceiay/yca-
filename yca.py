@@ -8,6 +8,8 @@ from tavily import TavilyClient
 from streamlit_mic_recorder import speech_to_text
 from gtts import gTTS
 from authlib.integrations.requests_client import OAuth2Session
+from PIL import Image
+import google.generativeai as genai
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="YCA - Akıllı Hibrit Asistan", page_icon="🤖")
@@ -85,8 +87,10 @@ HAFIZA_DOSYASI = f"hafiza_{safe_email_filename}.json"
 
 st.sidebar.success(f"Giriş yapıldı:\n{user.get('name', 'Kullanıcı')}\n({user_email})")
 
+# Düzeltilmiş Çıkış Yap Butonu (Oturum hafızasını tamamen temizler)
 if st.sidebar.button("Çıkış Yap"):
-    st.session_state.user = None
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
     st.query_params.clear()
     st.rerun()
 
@@ -109,119 +113,155 @@ def hafizayi_kaydet(data):
 
 hafiza = hafizayi_yukle()
 
-# Groq İstemci Ayarları
+# API İstemci Ayarları
 groq_api_key = st.secrets.get("GROQ_API_KEY", "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")
 client = Groq(api_key=groq_api_key)
 
-# Tavily İstemci Ayarları
 tavily_api_key = st.secrets.get("TAVILY_API_KEY", "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")
 tavily_client = TavilyClient(api_key=tavily_api_key)
 
+# Gemini Vision Yapılandırması (Secrets içine GEMINI_API_KEY eklediğinden emin ol)
+gemini_api_key = st.secrets.get("GEMINI_API_KEY", "")
+if gemini_api_key:
+    genai.configure(api_key=gemini_api_key)
+
 st.title("YCA - Akıllı Hibrit Asistan")
 
-if "messages" not in st.session_state:
-    st.session_state.messages = hafiza["sohbet_gecmisi"]
+# --- KENAR ÇUBUĞU: KANAL / MOD SEÇİMİ (CHAT vs. KAMERA) ---
+app_mode = st.sidebar.radio("Mod Seçimi", ["💬 Sohbet & Asistan", "📷 Kamera & Nesne Tanıma (Vision)"])
 
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+if app_mode == "💬 Sohbet & Asistan":
+    if "messages" not in st.session_state:
+        st.session_state.messages = hafiza["sohbet_gecmisi"]
 
-def internetten_bul(sorgu):
-    try:
-        response = tavily_client.search(query=sorgu, search_depth="advanced", max_results=3)
-        results = response.get("results", [])
-        if results:
-            return "\n".join([f"- {r['title']}: {r['content']}" for r in results])
-        return "İnternette güncel bilgi bulunamadı."
-    except Exception as e:
-        return f"Arama hatası: {e}"
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-aktif_kaynak = None
-prompt = None
-
-col1, col2 = st.columns([10, 1])
-
-with col1:
-    chat_input = st.chat_input("YCA'ya bir şeyler yaz veya mikrofonu kullan...")
-
-with col2:
-    sesli_metin = speech_to_text(
-        language="tr",
-        start_prompt="🎤",
-        stop_prompt="⏹️",
-        just_once=True,
-        key="whatsapp_mic"
-    )
-
-if chat_input:
-    prompt = chat_input
-    aktif_kaynak = "yazi"
-elif sesli_metin:
-    prompt = sesli_metin
-    aktif_kaynak = "ses"
-
-if prompt:
-    user_msg = {"role": "user", "content": prompt}
-    st.session_state.messages.append(user_msg)
-    hafiza["sohbet_gecmisi"] = st.session_state.messages
-    hafizayi_kaydet(hafiza)
-
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    bugun_tarih = datetime.now().strftime("%d %B %Y, %A")
-
-    temiz_prompt = prompt.lower().strip()
-    selamlasmalar = ["merhaba", "selam", "selamın aleyküm", "günaydın", "iyi akşamlar", "nasılsın", "teşekkürler", "sağ ol"]
-    
-    arama_gerekli_mi = True
-    if temiz_prompt in selamlasmalar or len(temiz_prompt) < 3:
-        arama_gerekli_mi = False
-
-    baglam = ""
-    if arama_gerekli_mi:
-        with st.spinner("Tavily ile güncel bilgiler araştırılıyor..."):
-            baglam = internetten_bul(prompt)
-
-    sistem_mesaji = (
-        f"Sen akıllı ve yardımcısın. Türkçe olarak doğal sohbet et, kullanıcıyı hatırla.\n"
-        f"Bugünün tarihi: {bugun_tarih}.\n"
-        f"Eğer sana internetten güncel bilgiler verildiyse, bu bilgileri kullanarak kullanıcının sorusuna net, güncel ve doğru yanıtlar ver."
-    )
-    if baglam:
-        sistem_mesaji += f"\n\nİnternetten elde edilen güncel bilgiler:\n{baglam}"
-
-    mesaj_listesi = [{"role": "system", "content": sistem_mesaji}] + st.session_state.messages
-
-    with st.chat_message("assistant"):
-        response_placeholder = st.empty()
-        full_response = ""
-        
+    def internetten_bul(sorgu):
         try:
-            completion = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=mesaj_listesi,
-                stream=True
-            )
-            
-            for chunk in completion:
-                if chunk.choices[0].delta.content:
-                    full_response += chunk.choices[0].delta.content
-                    response_placeholder.markdown(full_response)
-                    
-            response_placeholder.markdown(full_response)
-            
-            assistant_msg = {"role": "assistant", "content": full_response}
-            st.session_state.messages.append(assistant_msg)
-            hafiza["sohbet_gecmisi"] = st.session_state.messages
-            hafizayi_kaydet(hafiza)
-            
-            if aktif_kaynak == "ses":
-                tts = gTTS(text=full_response, lang='tr', tld='com.tr')
-                ses_dosyasi = "temp_yanit.mp3"
-                tts.save(ses_dosyasi)
-                st.audio(ses_dosyasi, format="audio/mp3", autoplay=True)
-            
+            response = tavily_client.search(query=sorgu, search_depth="advanced", max_results=3)
+            results = response.get("results", [])
+            if results:
+                return "\n".join([f"- {r['title']}: {r['content']}" for r in results])
+            return "İnternette güncel bilgi bulunamadı."
         except Exception as e:
-            error_msg = f"Bir hata oluştu: {e}"
-            response_placeholder.markdown(error_msg) 
+            return f"Arama hatası: {e}"
+
+    aktif_kaynak = None
+    prompt = None
+
+    col1, col2 = st.columns([10, 1])
+
+    with col1:
+        chat_input = st.chat_input("YCA'ya bir şeyler yaz veya mikrofonu kullan...")
+
+    with col2:
+        sesli_metin = speech_to_text(
+            language="tr",
+            start_prompt="🎤",
+            stop_prompt="⏹️",
+            just_once=True,
+            key="whatsapp_mic"
+        )
+
+    if chat_input:
+        prompt = chat_input
+        aktif_kaynak = "yazi"
+    elif sesli_metin:
+        prompt = sesli_metin
+        aktif_kaynak = "ses"
+
+    if prompt:
+        user_msg = {"role": "user", "content": prompt}
+        st.session_state.messages.append(user_msg)
+        hafiza["sohbet_gecmisi"] = st.session_state.messages
+        hafizayi_kaydet(hafiza)
+
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        bugun_tarih = datetime.now().strftime("%d %B %Y, %A")
+
+        temiz_prompt = prompt.lower().strip()
+        selamlasmalar = ["merhaba", "selam", "selamın aleyküm", "günaydın", "iyi akşamlar", "nasılsın", "teşekkürler", "sağ ol"]
+        
+        arama_gerekli_mi = True
+        if temiz_prompt in selamlasmalar or len(temiz_prompt) < 3:
+            arama_gerekli_mi = False
+
+        baglam = ""
+        if arama_gerekli_mi:
+            with st.spinner("Tavily ile güncel bilgiler araştırılıyor..."):
+                baglam = internetten_bul(prompt)
+
+        sistem_mesaji = (
+            f"Sen akıllı ve yardımcısın. Türkçe olarak doğal sohbet et, kullanıcıyı hatırla.\n"
+            f"Bugünün tarihi: {bugun_tarih}.\n"
+            f"Eğer sana internetten güncel bilgiler verildiyse, bu bilgileri kullanarak kullanıcının sorusuna net, güncel ve doğru yanıtlar ver."
+        )
+        if baglam:
+            sistem_mesaji += f"\n\nİnternetten elde edilen güncel bilgiler:\n{baglam}"
+
+        mesaj_listesi = [{"role": "system", "content": sistem_mesaji}] + st.session_state.messages
+
+        with st.chat_message("assistant"):
+            response_placeholder = st.empty()
+            full_response = ""
+            
+            try:
+                completion = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=mesaj_listesi,
+                    stream=True
+                )
+                
+                for chunk in completion:
+                    if chunk.choices[0].delta.content:
+                        full_response += chunk.choices[0].delta.content
+                        response_placeholder.markdown(full_response)
+                        
+                response_placeholder.markdown(full_response)
+                
+                assistant_msg = {"role": "assistant", "content": full_response}
+                st.session_state.messages.append(assistant_msg)
+                hafiza["sohbet_gecmisi"] = st.session_state.messages
+                hafizayi_kaydet(hafiza)
+                
+                if aktif_kaynak == "ses":
+                    tts = gTTS(text=full_response, lang='tr', tld='com.tr')
+                    ses_dosyasi = "temp_yanit.mp3"
+                    tts.save(ses_dosyasi)
+                    st.audio(ses_dosyasi, format="audio/mp3", autoplay=True)
+                
+            except Exception as e:
+                error_msg = f"Bir hata oluştu: {e}"
+                response_placeholder.markdown(error_msg)
+
+elif app_mode == "📷 Kamera & Nesne Tanıma (Vision)":
+    st.subheader("YCA Vision - Gerçek Zamanlı Nesne ve Görsel Analizi")
+    st.write("Kameradan bir fotoğraf çekerek veya nesne göstererek analiz ettirebilirsiniz.")
+
+    # Benzersiz bir key ekleyerek DOM uyuşmazlıklarının önüne geçiyoruz
+    camera_file = st.camera_input("Fotoğraf Çek", key="yca_vision_camera")
+
+    if camera_file is not None:
+        image = Image.open(camera_file)
+        st.image(image, caption="Yakalanan Görüntü", use_container_width=True)
+        
+        
+        vision_prompt = st.text_input("Görsel hakkında ne öğrenmek istiyorsun?", "Bu fotoğrafın içinde ne var, detaylı açıkla.", key="vision_prompt_input")
+        
+        if st.button("Görseli Analiz Et", key="vision_analyze_btn"):
+            if not gemini_api_key:
+                st.error("Streamlit Secrets içinde `GEMINI_API_KEY` tanımlı değil!")
+            else:
+                with st.spinner("Görsel analiz ediliyor..."):
+                    try:
+                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        response = model.generate_content([vision_prompt, image])
+                        
+                        st.success("Analiz Başarılı!")
+                        st.markdown(response.text)
+                    except Exception as e:
+                        st.error(f"Görsel analiz edilirken hata oluştu: {e}")
