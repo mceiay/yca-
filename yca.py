@@ -10,6 +10,7 @@ from gtts import gTTS
 from authlib.integrations.requests_client import OAuth2Session
 from PIL import Image
 import google.generativeai as genai
+from google.generativeai.client import configure
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="YCA - Akıllı Hibrit Asistan", page_icon="🤖")
@@ -250,14 +251,25 @@ elif app_mode == "📷 Kamera & Nesne Tanıma (Vision)":
             else:
                 with st.spinner("Görsel analiz ediliyor..."):
                     try:
-                        # Çakışmayı engellemek için ortam değişkenlerini temizleyip,
-                        # doğrudan API anahtarıyla client oluşturuyoruz.
+                        # OAuth token çakışmasını önlemek için global client'ı doğrudan API anahtarıyla zorluyoruz
+                        genai.api_key = None
+                        if "GOOGLE_API_KEY" in os.environ:
+                            del os.environ["GOOGLE_API_KEY"]
                         if "GEMINI_API_KEY" in os.environ:
                             del os.environ["GEMINI_API_KEY"]
+                            
+                        # Doğrudan Client nesnesi üzerinden request atarak global state sızıntısını kesiyoruz
+                        chat_client = genai.Client(api_key=gemini_api_key) if hasattr(genai, "Client") else None
                         
-                        genai.configure(api_key=gemini_api_key)
-                        model = genai.GenerativeModel('gemini-1.5-flash')
-                        response = model.generate_content([vision_prompt, image])
+                        if chat_client:
+                            response = chat_client.models.generate_content(
+                                model='gemini-1.5-flash',
+                                contents=[vision_prompt, image]
+                            )
+                        else:
+                            genai.configure(api_key=gemini_api_key)
+                            model = genai.GenerativeModel('gemini-1.5-flash')
+                            response = model.generate_content([vision_prompt, image])
                         
                         st.success("Analiz Başarılı!")
                         st.markdown(response.text)
