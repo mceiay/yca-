@@ -168,7 +168,7 @@ app_mode = st.sidebar.radio("Mod Seçimi", ["💬 Sohbet & Asistan", "📷 Kamer
 
 # Edge-TTS Asenkron Ses Sentezleme Fonksiyonu
 async def text_to_speech_edge(text, output_file):
-    voice = "tr-TR-AhmetNeural" # Son derece doğal ve akıcı Türkçe ses
+    voice = "tr-TR-AhmetNeural" 
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(output_file)
 
@@ -275,7 +275,6 @@ if app_mode == "💬 Sohbet & Asistan":
                 hafiza["sohbet_gecmisi"] = st.session_state.messages
                 hafizayi_kaydet(hafiza)
                 
-                # Sesli yanıt durumunda robotik gTTS yerine gelişmiş Edge-TTS kullanıyoruz
                 if aktif_kaynak == "ses":
                     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
                     temp_file_path = temp_file.name
