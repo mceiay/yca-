@@ -1,19 +1,60 @@
+import base64
+import io
 import json
 import os
+import asyncio
+import tempfile
 from datetime import datetime
 import streamlit as st
 import requests
 from groq import Groq
 from tavily import TavilyClient
 from streamlit_mic_recorder import speech_to_text
-from gtts import gTTS
+import edge_tts
 from authlib.integrations.requests_client import OAuth2Session
 from PIL import Image
-import base64
-import io
 
 # Sayfa Yapılandırması
-st.set_page_config(page_title="YCA - Akıllı Hibrit Asistan", page_icon="🤖")
+st.set_page_config(page_title="YCA - Akıllı Hibrit Asistan", page_icon="🤖", layout="centered")
+
+# --- ÖZEL CSS (ChatGPT Tarzı Animasyonlu Orb ve Şık Arayüz) ---
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background-color: #121212;
+        color: #ffffff;
+    }
+    .orb-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 180px;
+        margin-bottom: 20px;
+    }
+    .pulse-orb {
+        width: 110px;
+        height: 110px;
+        background: radial-gradient(circle, #4facfe 0%, #00f2fe 100%);
+        border-radius: 50%;
+        box-shadow: 0 0 40px rgba(0, 242, 254, 0.6);
+        animation: pulse 2s infinite ease-in-out;
+    }
+    @keyframes pulse {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 242, 254, 0.7); }
+        70% { transform: scale(1.05); box-shadow: 0 0 0 25px rgba(0, 242, 254, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 242, 254, 0); }
+    }
+    .chat-box {
+        background-color: #1e1e1e;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+    }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
 
 # --- GOOGLE OAUTH KİMLİK DOĞRULAMA KONTROLÜ ---
 client_id = st.secrets["google_oauth"]["client_id"]
@@ -113,15 +154,28 @@ def hafizayi_kaydet(data):
 
 hafiza = hafizayi_yukle()
 
-groq_api_key = st.secrets.get("GROQ_API_KEY", "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")
+groq_api_key = st.secrets.get("GROQ_API_KEY", "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")
 client = Groq(api_key=groq_api_key)
 
 tavily_api_key = st.secrets.get("TAVILY_API_KEY", "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")
 tavily_client = TavilyClient(api_key=tavily_api_key)
 
+# Dinamik Orb Alanı (ChatGPT tarzı görsel odak noktası)
+st.markdown('<div class="orb-container"><div class="pulse-orb"></div></div>', unsafe_allow_html=True)
 st.title("YCA - Akıllı Hibrit Asistan")
 
 app_mode = st.sidebar.radio("Mod Seçimi", ["💬 Sohbet & Asistan", "📷 Kamera & Nesne Tanıma (Vision)"])
+
+# Edge-TTS Asenkron Ses Sentezleme Fonksiyonu
+async def text_to_speech_edge(text, output_file):
+    voice = "tr-TR-AhmetNeural" # Son derece doğal ve akıcı Türkçe ses
+    communicate = edge_tts.Communicate(text, voice)
+    await communicate.save(output_file)
+
+def play_audio_file(file_path):
+    with open(file_path, "rb") as f:
+        audio_bytes = f.read()
+    st.audio(audio_bytes, format="audio/mp3", autoplay=True)
 
 if app_mode == "💬 Sohbet & Asistan":
     if "messages" not in st.session_state:
@@ -221,11 +275,14 @@ if app_mode == "💬 Sohbet & Asistan":
                 hafiza["sohbet_gecmisi"] = st.session_state.messages
                 hafizayi_kaydet(hafiza)
                 
+                # Sesli yanıt durumunda robotik gTTS yerine gelişmiş Edge-TTS kullanıyoruz
                 if aktif_kaynak == "ses":
-                    tts = gTTS(text=full_response, lang='tr', tld='com.tr')
-                    ses_dosyasi = "temp_yanit.mp3"
-                    tts.save(ses_dosyasi)
-                    st.audio(ses_dosyasi, format="audio/mp3", autoplay=True)
+                    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+                    temp_file_path = temp_file.name
+                    temp_file.close()
+
+                    asyncio.run(text_to_speech_edge(full_response, temp_file_path))
+                    play_audio_file(temp_file_path)
                 
             except Exception as e:
                 error_msg = f"Bir hata oluştu: {e}"
