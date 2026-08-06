@@ -154,7 +154,7 @@ def hafizayi_kaydet(data):
 
 hafiza = hafizayi_yukle()
 
-groq_api_key = st.secrets.get("GROQ_API_KEY", "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")
+groq_api_key = st.secrets.get("GROQ_API_KEY", "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")
 client = Groq(api_key=groq_api_key)
 
 tavily_api_key = st.secrets.get("TAVILY_API_KEY", "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")
